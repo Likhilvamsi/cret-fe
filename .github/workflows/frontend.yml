@@ -59,6 +59,8 @@ jobs:
     - name: Apply NGINX Configuration
       run: |
         ssh -i ~/.ssh/id_rsa "${{ secrets.SSH_USER }}"@"${{ secrets.SSH_HOST }}" "
+          sudo mkdir -p /etc/nginx/sites-available &&
+          sudo mkdir -p /etc/nginx/sites-enabled &&
           sudo mv /tmp/crt-frontend.conf /etc/nginx/sites-available/crt-frontend.conf &&
           sudo ln -sf /etc/nginx/sites-available/crt-frontend.conf /etc/nginx/sites-enabled/crt-frontend.conf &&
           sudo nginx -t &&
