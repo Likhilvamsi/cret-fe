@@ -10,9 +10,38 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout Code
+    # 1️⃣ Get the code
+    - name: Checkout Repository
       uses: actions/checkout@v3
 
+    # 2️⃣ Setup Node 20 (same version as server)
+    - name: Setup Node
+      uses: actions/setup-node@v4
+      with:
+        node-version: 20
+
+    # 3️⃣ Cache Dependencies
+    - name: Cache npm
+      uses: actions/cache@v3
+      with:
+        path: ~/.npm
+        key: ${{ runner.os }}-node-${{ hashFiles('package-lock.json') }}
+
+    # 4️⃣ Install dependencies
+    - name: Install Dependencies
+      run: npm ci
+
+    # 5️⃣ Build Next.js once — not on the server
+    - name: Build Project
+      run: npm run build
+
+    # 6️⃣ Prepare artifacts to deploy (only required files)
+    - name: Prepare Deployment Files
+      run: |
+        mkdir -p deploy-dist
+        cp -r .next package.json next.config.js public deploy-dist/
+
+    # 7️⃣ Setup SSH access
     - name: Setup SSH
       run: |
         mkdir -p ~/.ssh
@@ -20,42 +49,27 @@ jobs:
         chmod 600 ~/.ssh/id_rsa
         ssh-keyscan -H "${{ secrets.SSH_HOST }}" >> ~/.ssh/known_hosts
 
-    - name: Install Node.js 20 on Server
-      run: |
-        ssh -i ~/.ssh/id_rsa "${{ secrets.SSH_USER }}"@"${{ secrets.SSH_HOST }}" "
-          curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash - &&
-          sudo apt install -y nodejs &&
-          node -v &&
-          npm -v
-        "
-
-    - name: Upload Frontend Source
+    # 8️⃣ Upload only built files (FAST)
+    - name: Upload Build to Server
       run: |
         ssh -i ~/.ssh/id_rsa "${{ secrets.SSH_USER }}"@"${{ secrets.SSH_HOST }}" "mkdir -p ~/crt-app/frontend"
-        scp -i ~/.ssh/id_rsa -r ./* "${{ secrets.SSH_USER }}"@"${{ secrets.SSH_HOST }}":~/crt-app/frontend/
+        scp -i ~/.ssh/id_rsa -r deploy-dist/* "${{ secrets.SSH_USER }}"@"${{ secrets.SSH_HOST }}":~/crt-app/frontend/
 
-    - name: Install & Build Frontend on Server
-      run: |
-        ssh -i ~/.ssh/id_rsa "${{ secrets.SSH_USER }}"@"${{ secrets.SSH_HOST }}" "
-          cd ~/crt-app/frontend &&
-          npm install &&
-          npm run build
-        "
-
-    - name: Configure PM2
+    # 9️⃣ Restart PM2 (zero downtime reload)
+    - name: Restart App via PM2
       run: |
         ssh -i ~/.ssh/id_rsa "${{ secrets.SSH_USER }}"@"${{ secrets.SSH_HOST }}" "
           sudo npm install -g pm2 &&
-          cd ~/crt-app/frontend &&
-          pm2 delete crt-frontend || true &&
-          pm2 start 'npm start' --name crt-frontend --time &&
+          pm2 reload crt-frontend || pm2 start 'npm start' --name crt-frontend &&
           pm2 save
         "
 
+    # 🔟 Upload NGINX config if needed
     - name: Upload NGINX Config
       run: |
         scp -i ~/.ssh/id_rsa deploy/nginx.conf "${{ secrets.SSH_USER }}"@"${{ secrets.SSH_HOST }}":/tmp/crt-frontend.conf
 
+    # 1️⃣1️⃣ Apply NGINX config + restart NGINX
     - name: Apply NGINX Configuration
       run: |
         ssh -i ~/.ssh/id_rsa "${{ secrets.SSH_USER }}"@"${{ secrets.SSH_HOST }}" "
