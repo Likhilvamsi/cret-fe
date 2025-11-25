@@ -20,7 +20,7 @@ jobs:
         chmod 600 ~/.ssh/id_rsa
         ssh-keyscan -H "${{ secrets.SSH_HOST }}" >> ~/.ssh/known_hosts
 
-        - name: Install Node.js on Server
+    - name: Install Node.js 20 on Server
       run: |
         ssh -i ~/.ssh/id_rsa "${{ secrets.SSH_USER }}"@"${{ secrets.SSH_HOST }}" "
           curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash - &&
@@ -29,13 +29,12 @@ jobs:
           npm -v
         "
 
-
-    - name: Upload Frontend Code
+    - name: Upload Frontend Source
       run: |
         ssh -i ~/.ssh/id_rsa "${{ secrets.SSH_USER }}"@"${{ secrets.SSH_HOST }}" "mkdir -p ~/crt-app/frontend"
         scp -i ~/.ssh/id_rsa -r ./* "${{ secrets.SSH_USER }}"@"${{ secrets.SSH_HOST }}":~/crt-app/frontend/
 
-    - name: Install & Build on Server
+    - name: Install & Build Frontend on Server
       run: |
         ssh -i ~/.ssh/id_rsa "${{ secrets.SSH_USER }}"@"${{ secrets.SSH_HOST }}" "
           cd ~/crt-app/frontend &&
@@ -43,24 +42,24 @@ jobs:
           npm run build
         "
 
-    - name: Start with PM2
+    - name: Configure PM2
       run: |
         ssh -i ~/.ssh/id_rsa "${{ secrets.SSH_USER }}"@"${{ secrets.SSH_HOST }}" "
           sudo npm install -g pm2 &&
           cd ~/crt-app/frontend &&
           pm2 delete crt-frontend || true &&
-          pm2 start 'npm start' --name crt-frontend &&
+          pm2 start 'npm start' --name crt-frontend --time &&
           pm2 save
         "
 
-    - name: Upload nginx.conf
+    - name: Upload NGINX Config
       run: |
-        scp -i ~/.ssh/id_rsa deploy/nginx.conf "${{ secrets.SSH_USER }}"@"${{ secrets.SSH_HOST }}":/tmp/nginx.conf
+        scp -i ~/.ssh/id_rsa deploy/nginx.conf "${{ secrets.SSH_USER }}"@"${{ secrets.SSH_HOST }}":/tmp/crt-frontend.conf
 
-    - name: Apply NGINX config
+    - name: Apply NGINX Configuration
       run: |
         ssh -i ~/.ssh/id_rsa "${{ secrets.SSH_USER }}"@"${{ secrets.SSH_HOST }}" "
-          sudo mv /tmp/nginx.conf /etc/nginx/sites-available/crt-frontend.conf &&
+          sudo mv /tmp/crt-frontend.conf /etc/nginx/sites-available/crt-frontend.conf &&
           sudo ln -sf /etc/nginx/sites-available/crt-frontend.conf /etc/nginx/sites-enabled/crt-frontend.conf &&
           sudo nginx -t &&
           sudo systemctl restart nginx
