@@ -13,11 +13,6 @@ jobs:
     - name: Checkout Code
       uses: actions/checkout@v3
 
-    - name: Install & Build Frontend
-      run: |
-        npm install
-        npm run build
-
     - name: Setup SSH
       run: |
         mkdir -p ~/.ssh
@@ -25,7 +20,51 @@ jobs:
         chmod 600 ~/.ssh/id_rsa
         ssh-keyscan -H ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
 
-    - name: Deploy frontend build to server
+    - name: Upload Frontend Source Code to Server
       run: |
-        ssh -i ~/.ssh/id_rsa ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "sudo rm -rf /var/www/crt-frontend/*"
-        scp -i ~/.ssh/id_rsa -r build/* ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/var/www/crt-frontend/
+        ssh -i ~/.ssh/id_rsa ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "mkdir -p ~/crt-app/frontend"
+        scp -i ~/.ssh/id_rsa -r ./* ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:~/crt-app/frontend/
+
+    - name: Install Dependencies & Build on Server
+      run: |
+        ssh -i ~/.ssh$id_rsa ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "
+        cd ~/crt-app/frontend &&
+        npm install &&
+        npm run build
+        "
+
+    - name: Configure PM2 (Run Next.js app forever)
+      run: |
+        ssh -i ~/.ssh/id_rsa ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "
+        sudo npm install -g pm2 &&
+        cd ~/crt-app/frontend &&
+        pm2 delete crt-frontend || true &&
+        pm2 start 'npm start' --name crt-frontend &&
+        pm2 save
+        "
+
+    - name: Configure NGINX Reverse Proxy
+      run: |
+        ssh -i ~/.ssh/id_rsa ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "
+        sudo bash -c 'cat > /etc/nginx/sites-available/crt-frontend.conf << EOF
+server {
+    listen 80;
+    server_name _;
+
+    location / {
+        proxy_pass http://localhost:3000;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+    }
+
+    location /api/ {
+        proxy_pass http://localhost:8000/;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+    }
+}
+EOF' &&
+        sudo ln -sf /etc/nginx/sites-available/crt-frontend.conf /etc/nginx/sites-enabled/crt-frontend.conf &&
+        sudo nginx -t &&
+        sudo systemctl restart nginx
+        "
