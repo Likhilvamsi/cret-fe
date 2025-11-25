@@ -43,9 +43,9 @@ jobs:
           pm2 save
         "
 
-    - name: Copy NGINX config to server
+    - name: Create nginx.conf
       run: |
-        cat <<EOF > nginx.conf
+        cat << 'EOF' > nginx.conf
 server {
     listen 80;
     server_name _;
@@ -63,9 +63,12 @@ server {
     }
 }
 EOF
+
+    - name: Upload NGINX Config
+      run: |
         scp -i ~/.ssh/id_rsa nginx.conf ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/tmp/crt-frontend.conf
 
-    - name: Apply NGINX configuration
+    - name: Apply NGINX Configuration
       run: |
         ssh -i ~/.ssh/id_rsa ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "
           sudo mv /tmp/crt-frontend.conf /etc/nginx/sites-available/crt-frontend.conf &&
