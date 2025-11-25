@@ -41,7 +41,7 @@ export default function DashboardLayout() {
           : 1;
 
       const res = await fetch(
-        `http://127.0.0.1:8000/app-admin/colleges?app_admin_id=${appAdminId}`
+        `http://52.247.225.119:8000/app-admin/colleges?app_admin_id=${appAdminId}`
       );
 
       if (!res.ok) throw new Error("Failed to load colleges");
@@ -67,7 +67,7 @@ export default function DashboardLayout() {
           : 1;
 
       const res = await fetch(
-        `http://127.0.0.1:8000/app-admin/colleges?app_admin_id=${appAdminId}`,
+        `http://52.247.225.119:8000/app-admin/colleges?app_admin_id=${appAdminId}`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
