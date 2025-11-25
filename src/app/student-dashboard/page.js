@@ -10,7 +10,7 @@ export default function DashboardLayout() {
         async function fetchStudent() {
             const userId = localStorage.getItem("user_id"); // stored at login
             const res = await fetch(
-                `http://127.0.0.1:8000/student/dashboard?user_id=${userId}`
+                `http://52.247.225.119:8000/student/dashboard?user_id=${userId}`
             );
             const result = await res.json();
             setData(result);
