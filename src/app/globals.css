@@ -1,26 +1,49 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap');
 @import "tailwindcss";
-
+/* Pin-to-Pin Dashboard Theme */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --font-primary: "Plus Jakarta Sans", sans-serif;
+  --page-bg: #EFAF9E;              /* Outer peach background */
+  --sidebar-bg: #E7DECE;           /* Beige sidebar */
+  --main-bg: #FFFFFF;              /* White content area */
+  --channels-bg: #E3F3EE;          /* Mint section background */
+
+  --text-primary: #1F1F1F;
+  --text-secondary: #6E6E6E;
+
+  /* Chart + accent colors */
+  --accent-yellow: #FDBB3B;
+  --accent-pink: #E8588C;
+  --accent-blue: #4A86E8;
+  --accent-orange: #F89B43;
+  --accent-red: #EE6055;
+
+  --card-shadow: 0px 5px 20px rgba(0, 0, 0, 0.06);
+  
 }
 
+/* Map to Tailwind tokens */
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
+   --font-sans: var(--font-primary);
+  --color-page-bg: var(--page-bg);
+  --color-sidebar-bg: var(--sidebar-bg);
+  --color-main-bg: var(--main-bg);
+  --color-channels-bg: var(--channels-bg);
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --color-text-primary: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+
+  --color-accent-yellow: var(--accent-yellow);
+  --color-accent-pink: var(--accent-pink);
+  --color-accent-blue: var(--accent-blue);
+  --color-accent-orange: var(--accent-orange);
+  --color-accent-red: var(--accent-red);
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  body {
+  background: var(--page-bg);
+  color: var(--text-primary);
+  font-family: var(--font-primary);
+}
 }
