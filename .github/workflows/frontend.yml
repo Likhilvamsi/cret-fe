@@ -20,12 +20,15 @@ jobs:
         chmod 600 ~/.ssh/id_rsa
         ssh-keyscan -H "${{ secrets.SSH_HOST }}" >> ~/.ssh/known_hosts
 
-    - name: Install Node.js on Server
+        - name: Install Node.js on Server
       run: |
         ssh -i ~/.ssh/id_rsa "${{ secrets.SSH_USER }}"@"${{ secrets.SSH_HOST }}" "
-          curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash - &&
-          sudo apt install -y nodejs
+          curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash - &&
+          sudo apt install -y nodejs &&
+          node -v &&
+          npm -v
         "
+
 
     - name: Upload Frontend Code
       run: |
