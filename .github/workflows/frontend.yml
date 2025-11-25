@@ -39,7 +39,7 @@ jobs:
     - name: Prepare Deployment Files
       run: |
         mkdir -p deploy-dist
-        cp -r .next package.json next.config.js public deploy-dist/
+        cp -r .next package.json public deploy-dist/
 
     # 7️⃣ Setup SSH access
     - name: Setup SSH
