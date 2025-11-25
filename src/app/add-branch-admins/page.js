@@ -58,7 +58,7 @@ const AddBranchAdmin = () => {
         if (!userId) return;
 
         const res = await fetch(
-          `http://127.0.0.1:8000/college-admin/branches?college_admin_id=${userId}`
+          `http://52.247.225.119:8000/college-admin/branches?college_admin_id=${userId}`
         );
         const data = await res.json();
         setBranchesData(data);
@@ -87,7 +87,7 @@ const AddBranchAdmin = () => {
       setSubmitting(true);
 
       const res = await fetch(
-        `http://127.0.0.1:8000/college-admin/branch-admins?college_admin_id=${userId}`,
+        `http://52.247.225.119:8000/college-admin/branch-admins?college_admin_id=${userId}`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
