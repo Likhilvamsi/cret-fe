@@ -11,7 +11,7 @@ export default function CourseModulesPage() {
 
   useEffect(() => {
     async function fetchMaterial() {
-      const res = await fetch("http://127.0.0.1:8000/student/read-material");
+      const res = await fetch("http://52.247.225.119:8000/student/read-material");
       const data = await res.json();
       setMaterial(data);
     }
