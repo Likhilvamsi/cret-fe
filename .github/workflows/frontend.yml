@@ -33,38 +33,42 @@ jobs:
         npm run build
         "
 
-    - name: Configure PM2 (Run Next.js app forever)
+    - name: Configure PM2 (Run Next.js App Forever)
       run: |
         ssh -i ~/.ssh/id_rsa ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "
         sudo npm install -g pm2 &&
         cd ~/crt-app/frontend &&
         pm2 delete crt-frontend || true &&
-        pm2 start 'npm start' --name crt-frontend &&
-        pm2 save
+        pm2 start 'npm start' --name crt-frontend --time &&
+        pm2 save &&
+        pm2 startup systemd -u ${{ secrets.SSH_USER }} --hp /home/${{ secrets.SSH_USER }}
         "
 
     - name: Configure NGINX Reverse Proxy
       run: |
-        ssh -i ~/.ssh/id_rsa ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "
-        sudo bash -c 'cat > /etc/nginx/sites-available/crt-frontend.conf << EOF
+        ssh -i ~/.ssh/id_rsa ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} << 'EOF'
+        sudo bash -c 'cat > /etc/nginx/sites-available/crt-frontend.conf << "NGINXCONF"
 server {
     listen 80;
     server_name _;
 
+    # FRONTEND → Next.js running on PM2 (port 3000)
     location / {
         proxy_pass http://localhost:3000;
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
     }
 
+    # BACKEND → FastAPI (port 8000)
     location /api/ {
         proxy_pass http://localhost:8000/;
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
     }
 }
-EOF' &&
-        sudo ln -sf /etc/nginx/sites-available/crt-frontend.conf /etc/nginx/sites-enabled/crt-frontend.conf &&
-        sudo nginx -t &&
+NGINXCONF'
+
+        sudo ln -sf /etc/nginx/sites-available/crt-frontend.conf /etc/nginx/sites-enabled/crt-frontend.conf
+        sudo nginx -t
         sudo systemctl restart nginx
-        "
+EOF
