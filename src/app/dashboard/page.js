@@ -14,7 +14,7 @@ export default function DashboardLayout() {
       if (!userId) return;
       try {
         const res = await fetch(
-          `http://127.0.0.1:8000/college-admin/dashboard?college_admin_id=${userId}`,
+          `http://52.247.225.119:8000/college-admin/dashboard?college_admin_id=${userId}`,
           {
             method: "GET",
             headers: { Accept: "application/json" },
