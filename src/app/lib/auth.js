@@ -1,6 +1,6 @@
 // lib/api/auth.js (UPDATED)
 
-const BASE_URL = "http://52.247.225.119:8000";
+const BASE_URL = "http://52.247.225.119/api";
 
 export async function collegeLogin(payload) {
   const res = await fetch(`${BASE_URL}/auth/login`, {
