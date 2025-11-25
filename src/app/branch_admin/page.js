@@ -72,7 +72,7 @@ const Branch = () => {
 
       // Fetch Branch + Courses
       const courseRes = await fetch(
-        `http://127.0.0.1:8000/branch-admin/courses?branch_admin_id=${branchAdminId}`
+        `http://52.247.225.119:8000/branch-admin/courses?branch_admin_id=${branchAdminId}`
       );
       const courseJson = await courseRes.json();
       setBranchData(courseJson);
@@ -91,7 +91,7 @@ const Branch = () => {
 
       // Fetch Students
       const studentsRes = await fetch(
-        `http://127.0.0.1:8000/branch-admin/students?branch_admin_id=${branchAdminId}`
+        `http://52.247.225.119:8000/branch-admin/students?branch_admin_id=${branchAdminId}`
       );
       const studentsJson = await studentsRes.json();
       setStudentsData(studentsJson);
@@ -123,7 +123,7 @@ const Branch = () => {
       console.log("Sending Student:", payload);
 
       const res = await fetch(
-        `http://127.0.0.1:8000/branch-admin/students?branch_admin_id=${branchAdminId}`,
+        `http://52.247.225.119:8000/branch-admin/students?branch_admin_id=${branchAdminId}`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -161,7 +161,7 @@ const Branch = () => {
       };
 
       const res = await fetch(
-        `http://127.0.0.1:8000/branch-admin/courses?branch_admin_id=${branchAdminId}`,
+        `http://52.247.225.119:8000/branch-admin/courses?branch_admin_id=${branchAdminId}`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
