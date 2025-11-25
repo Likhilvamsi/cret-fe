@@ -1,5 +1,5 @@
 // lib/api/dashboard.js
-const BASE_URL = "http://127.0.0.1:8000"; // change if needed
+const BASE_URL = "http://52.247.225.119:8000"; // change if needed
 
 export async function getCollegeDashboard() {
   const token =
