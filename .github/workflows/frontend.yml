@@ -24,15 +24,15 @@ jobs:
       run: |
         ssh -i ~/.ssh/id_rsa "${{ secrets.SSH_USER }}"@"${{ secrets.SSH_HOST }}" "
           curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash - &&
-          sudo apt-get install -y nodejs
+          sudo apt install -y nodejs
         "
 
-    - name: Upload Frontend Source
+    - name: Upload Frontend Code
       run: |
         ssh -i ~/.ssh/id_rsa "${{ secrets.SSH_USER }}"@"${{ secrets.SSH_HOST }}" "mkdir -p ~/crt-app/frontend"
         scp -i ~/.ssh/id_rsa -r ./* "${{ secrets.SSH_USER }}"@"${{ secrets.SSH_HOST }}":~/crt-app/frontend/
 
-    - name: Install & Build Frontend on Server
+    - name: Install & Build on Server
       run: |
         ssh -i ~/.ssh/id_rsa "${{ secrets.SSH_USER }}"@"${{ secrets.SSH_HOST }}" "
           cd ~/crt-app/frontend &&
@@ -40,43 +40,24 @@ jobs:
           npm run build
         "
 
-    - name: Configure PM2
+    - name: Start with PM2
       run: |
         ssh -i ~/.ssh/id_rsa "${{ secrets.SSH_USER }}"@"${{ secrets.SSH_HOST }}" "
           sudo npm install -g pm2 &&
           cd ~/crt-app/frontend &&
           pm2 delete crt-frontend || true &&
-          pm2 start 'npm start' --name crt-frontend --time &&
-          pm2 save &&
-          pm2 startup systemd -u ${{ secrets.SSH_USER }} --hp /home/${{ secrets.SSH_USER }}
+          pm2 start 'npm start' --name crt-frontend &&
+          pm2 save
         "
 
-    - name: Upload NGINX config
+    - name: Upload nginx.conf
       run: |
-        cat << 'EOF' > nginx.conf
-server {
-    listen 80;
-    server_name _;
+        scp -i ~/.ssh/id_rsa deploy/nginx.conf "${{ secrets.SSH_USER }}"@"${{ secrets.SSH_HOST }}":/tmp/nginx.conf
 
-    location / {
-        proxy_pass http://localhost:3000;
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
-    }
-
-    location /api/ {
-        proxy_pass http://localhost:8000/;
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
-    }
-}
-EOF
-        scp -i ~/.ssh/id_rsa nginx.conf "${{ secrets.SSH_USER }}"@"${{ secrets.SSH_HOST }}":/tmp/crt-frontend.conf
-
-    - name: Enable NGINX config
+    - name: Apply NGINX config
       run: |
         ssh -i ~/.ssh/id_rsa "${{ secrets.SSH_USER }}"@"${{ secrets.SSH_HOST }}" "
-          sudo mv /tmp/crt-frontend.conf /etc/nginx/sites-available/crt-frontend.conf &&
+          sudo mv /tmp/nginx.conf /etc/nginx/sites-available/crt-frontend.conf &&
           sudo ln -sf /etc/nginx/sites-available/crt-frontend.conf /etc/nginx/sites-enabled/crt-frontend.conf &&
           sudo nginx -t &&
           sudo systemctl restart nginx
