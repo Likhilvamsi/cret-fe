@@ -10,76 +10,89 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+    # 1️⃣ Checkout code
     - name: Checkout Repository
       uses: actions/checkout@v3
 
+    # 2️⃣ Setup Node 20 on runner & enable yarn/npm build
     - name: Setup Node
       uses: actions/setup-node@v4
       with:
         node-version: 20
+        cache: 'npm'
 
-    - name: Cache npm
+    # 3️⃣ Cache npm + Next.js build cache (reduces build time)
+    - name: Cache build outputs
       uses: actions/cache@v3
       with:
-        path: ~/.npm
-        key: ${{ runner.os }}-node-${{ hashFiles('package-lock.json') }}
+        path: |
+          ~/.npm
+          .next/cache
+        key: ${{ runner.os }}-crt-${{ hashFiles('package-lock.json') }}
+        restore-keys: |
+          ${{ runner.os }}-crt-
 
+    # 4️⃣ Install dependencies
     - name: Install Dependencies
       run: npm ci
 
-    - name: Build Project
+    # 5️⃣ Build frontend
+    - name: Build Next.js App
       run: npm run build
 
+    # 6️⃣ Prepare built deployment folder
     - name: Prepare Deployment Files
       run: |
         mkdir -p deploy-dist
-        cp -r .next package.json public deploy-dist/
+        cp -r .next public package.json package-lock.json deploy-dist/
 
+    # 7️⃣ Setup SSH
     - name: Setup SSH
       run: |
         mkdir -p ~/.ssh
         echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
         chmod 600 ~/.ssh/id_rsa
-        ssh-keyscan -H "${{ secrets.SSH_HOST }}" >> ~/.ssh/known_hosts
+        ssh-keyscan -H ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
 
+    # 8️⃣ Upload built files to server (fast deploy)
     - name: Upload Build to Server
       run: |
-        ssh -i ~/.ssh/id_rsa "${{ secrets.SSH_USER }}"@"${{ secrets.SSH_HOST }}" "mkdir -p ~/crt-app/frontend"
-        scp -i ~/.ssh/id_rsa -r deploy-dist/* "${{ secrets.SSH_USER }}"@"${{ secrets.SSH_HOST }}":~/crt-app/frontend/
+        ssh -i ~/.ssh/id_rsa ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "mkdir -p ~/crt-app/frontend"
+        scp -i ~/.ssh/id_rsa -r deploy-dist/* ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:~/crt-app/frontend/
 
-    - name: Restart App via PM2
+    # 9️⃣ Install PM2 & restart app
+    - name: Restart Frontend App
       run: |
-        ssh -i ~/.ssh/id_rsa "${{ secrets.SSH_USER }}"@"${{ secrets.SSH_HOST }}" "
-          sudo npm install -g pm2 &&
-          pm2 reload crt-frontend || pm2 start 'npm start' --name crt-frontend &&
+        ssh -i ~/.ssh/id_rsa ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "
+          if ! command -v pm2 >/dev/null 2>&1; then
+            sudo npm install -g pm2
+          fi
+          cd ~/crt-app/frontend
+          pm2 reload crt-frontend 2>/dev/null || pm2 start 'npm run start' --name crt-frontend
           pm2 save
         "
 
-    - name: Install NGINX if missing
+    # 🔟 Install NGINX once if missing
+    - name: Ensure NGINX Installed
       run: |
-        ssh -i ~/.ssh/id_rsa "${{ secrets.SSH_USER }}"@"${{ secrets.SSH_HOST }}" "
+        ssh -i ~/.ssh/id_rsa ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "
           if ! command -v nginx >/dev/null 2>&1; then
-            echo 'NGINX not found, installing...'
-            sudo apt update &&
-            sudo apt install -y nginx &&
-            sudo systemctl enable nginx &&
-            sudo systemctl start nginx
-          else
-            echo 'NGINX already installed'
+            sudo apt update && sudo apt install -y nginx
+            sudo systemctl enable nginx && sudo systemctl start nginx
           fi
         "
 
+    # 1️⃣1️⃣ Upload NGINX config
     - name: Upload NGINX Config
       run: |
-        scp -i ~/.ssh/id_rsa deploy/nginx.conf "${{ secrets.SSH_USER }}"@"${{ secrets.SSH_HOST }}":/tmp/crt-frontend.conf
+        scp -i ~/.ssh/id_rsa deploy/nginx.conf ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/tmp/crt.conf
 
+    # 1️⃣2️⃣ Apply NGINX Config & restart
     - name: Apply NGINX Configuration
       run: |
-        ssh -i ~/.ssh/id_rsa "${{ secrets.SSH_USER }}"@"${{ secrets.SSH_HOST }}" "
-          sudo mkdir -p /etc/nginx/sites-available &&
-          sudo mkdir -p /etc/nginx/sites-enabled &&
-          sudo mv /tmp/crt-frontend.conf /etc/nginx/sites-available/crt-frontend.conf &&
-          sudo ln -sf /etc/nginx/sites-available/crt-frontend.conf /etc/nginx/sites-enabled/crt-frontend.conf &&
-          sudo nginx -t &&
-          sudo systemctl restart nginx
+        ssh -i ~/.ssh/id_rsa ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "
+          sudo mv /tmp/crt.conf /etc/nginx/sites-available/crt.conf
+          sudo ln -sf /etc/nginx/sites-available/crt.conf /etc/nginx/sites-enabled/crt.conf
+          sudo rm -f /etc/nginx/sites-enabled/default 2>/dev/null || true
+          sudo nginx -t && sudo systemctl restart nginx
         "
