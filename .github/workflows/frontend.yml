@@ -1,28 +1,26 @@
-name: Deploy CRT Frontend
+name: Deploy CRT Application
 
 on:
   push:
-    branches:
-      - main
+    branches: ["main"]
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
 
     steps:
-    # 1️⃣ Checkout code
-    - name: Checkout Repository
-      uses: actions/checkout@v3
+    # 1️⃣ Checkout
+    - uses: actions/checkout@v3
 
-    # 2️⃣ Setup Node 20 on runner & enable yarn/npm build
-    - name: Setup Node
+    # 2️⃣ Node setup (only GitHub build happens here)
+    - name: Setup Node 20
       uses: actions/setup-node@v4
       with:
         node-version: 20
         cache: 'npm'
 
-    # 3️⃣ Cache npm + Next.js build cache (reduces build time)
-    - name: Cache build outputs
+    # 3️⃣ Cache dependencies + NEXT build cache → reduces build from 13 mins → ~3 to 5 mins
+    - name: Cache npm + Next.js build
       uses: actions/cache@v3
       with:
         path: |
@@ -32,67 +30,48 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-crt-
 
-    # 4️⃣ Install dependencies
+    # 4️⃣ Install
     - name: Install Dependencies
       run: npm ci
 
-    # 5️⃣ Build frontend
-    - name: Build Next.js App
+    # 5️⃣ Build once on GitHub
+    - name: Build Next.js
       run: npm run build
 
-    # 6️⃣ Prepare built deployment folder
-    - name: Prepare Deployment Files
+    # 6️⃣ Create deployment package
+    - name: Prepare deploy artifacts
       run: |
         mkdir -p deploy-dist
-        cp -r .next public package.json package-lock.json deploy-dist/
+        cp -r .next public package.json deploy-dist/
 
     # 7️⃣ Setup SSH
-    - name: Setup SSH
+    - name: Setup SSH Keys
       run: |
         mkdir -p ~/.ssh
         echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
         chmod 600 ~/.ssh/id_rsa
         ssh-keyscan -H ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
 
-    # 8️⃣ Upload built files to server (fast deploy)
-    - name: Upload Build to Server
+    # 8️⃣ Upload build to server (fast)
+    - name: Deploy Build to Server
       run: |
         ssh -i ~/.ssh/id_rsa ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "mkdir -p ~/crt-app/frontend"
         scp -i ~/.ssh/id_rsa -r deploy-dist/* ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:~/crt-app/frontend/
 
-    # 9️⃣ Install PM2 & restart app
-    - name: Restart Frontend App
+    # 9️⃣ Restart App
+    - name: Restart Frontend (PM2)
       run: |
         ssh -i ~/.ssh/id_rsa ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "
-          if ! command -v pm2 >/dev/null 2>&1; then
-            sudo npm install -g pm2
-          fi
-          cd ~/crt-app/frontend
-          pm2 reload crt-frontend 2>/dev/null || pm2 start 'npm run start' --name crt-frontend
+          pm2 reload crt-frontend || pm2 start 'next start -p 3000' --name crt-frontend
           pm2 save
         "
 
-    # 🔟 Install NGINX once if missing
-    - name: Ensure NGINX Installed
+    # 🔟 Deploy API Backend (FastAPI) via PM2
+    - name: Deploy Backend (PM2)
       run: |
         ssh -i ~/.ssh/id_rsa ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "
-          if ! command -v nginx >/dev/null 2>&1; then
-            sudo apt update && sudo apt install -y nginx
-            sudo systemctl enable nginx && sudo systemctl start nginx
-          fi
-        "
-
-    # 1️⃣1️⃣ Upload NGINX config
-    - name: Upload NGINX Config
-      run: |
-        scp -i ~/.ssh/id_rsa deploy/nginx.conf ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/tmp/crt.conf
-
-    # 1️⃣2️⃣ Apply NGINX Config & restart
-    - name: Apply NGINX Configuration
-      run: |
-        ssh -i ~/.ssh/id_rsa ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "
-          sudo mv /tmp/crt.conf /etc/nginx/sites-available/crt.conf
-          sudo ln -sf /etc/nginx/sites-available/crt.conf /etc/nginx/sites-enabled/crt.conf
-          sudo rm -f /etc/nginx/sites-enabled/default 2>/dev/null || true
-          sudo nginx -t && sudo systemctl restart nginx
+          cd ~/crt-app/backend || exit 1
+          if ! command -v pm2 >/dev/null 2>&1; then sudo npm install -g pm2; fi
+          pm2 reload backend || pm2 start 'uvicorn main:app --host 0.0.0.0 --port 8000' --name backend
+          pm2 save
         "
