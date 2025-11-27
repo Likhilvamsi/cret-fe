@@ -18,7 +18,7 @@ function ModuleContent() {
         }
 
         const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 10000); // 10s timeout
+        const timeout = setTimeout(() => controller.abort(), 10000);
 
         const res = await fetch(
           `${process.env.NEXT_PUBLIC_API_BASE_URL}/student/read-material?module=${moduleId}`,
@@ -34,15 +34,19 @@ function ModuleContent() {
         if (!res.ok) {
           const errorText = await res.text();
           console.error(`Backend Error (status ${res.status}):`, errorText);
-          setMaterial({ content: `Server Error: ${res.status} — ${errorText}` });
+          setMaterial({ content: `Server Error: ${res.status}` });
           return;
         }
 
         const data = await res.json();
-        setMaterial({ content: data.content || "No study material available for this module." });
+
+        setMaterial({
+          content: data.content ?? data.material ?? data.detail ?? data.message ?? "No study material available."
+        });
+
       } catch (error) {
-        console.error("Network/API Fetch Error:", error);
-        setMaterial({ content: "Failed to load study material: " + error.message });
+        console.error("Fetch Error:", error.message);
+        setMaterial({ content: "Failed to load study material." });
       }
     }
 
@@ -53,7 +57,7 @@ function ModuleContent() {
 
   return (
     <div className="p-10 space-y-8 bg-main-bg min-h-screen">
-      <h1 className="text-3xl font-bold">{`Module ${moduleId} - Study Material`}</h1>
+      <h1 className="text-3xl font-bold">Module {moduleId} - Study Material</h1>
       <div className="bg-white shadow-xl rounded-3xl p-8 whitespace-pre-line">
         {material.content}
       </div>
