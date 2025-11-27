@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 
-const API_BASE = "http://52.247.225.119:8000"; // backend API ✅
+const API_BASE = "http://52.247.225.119:8000"; // Backend API must keep port 8000
 
 export default function CourseModulesPage() {
   const searchParams = useSearchParams();
@@ -15,42 +15,40 @@ export default function CourseModulesPage() {
   useEffect(() => {
     async function fetchMaterial() {
       try {
-        if (!moduleId) {
-          setError("Module not found in URL");
-          return;
+        setError(null);
+
+        const res = await fetch(`${API_BASE}/student/read-material?module=${moduleId}`, {
+          method: "GET",
+          headers: { "Accept": "application/json" },
+          cache: "no-store",
+        });
+
+        if (!res.ok) {
+          throw new Error(`Backend returned ${res.status}`);
         }
 
-        const res = await fetch(
-          `${API_BASE}/student/read-material?module=${moduleId}`,
-          {
-            method: "GET",
-            headers: { "Accept": "application/json" },
-            cache: "no-store",
-          }
-        );
-
-        if (!res.ok) throw new Error(`API error ${res.status}`);
-
         const json = await res.json();
-
-        // Backend returns { file_name, content }
-        setMaterial({ content: json.content }); ✅
+        setMaterial({ content: json.content });
       } catch (err) {
-        console.error("❌ Fetch failed:", err);
+        console.error("API Error:", err);
         setError("Failed to load material");
       }
     }
 
-    if (moduleId) fetchMaterial();
+    if (moduleId) {
+      fetchMaterial();
+    } else {
+      setError("Module ID missing");
+    }
   }, [moduleId]);
 
-  if (error)
+  if (error) {
     return <div className="text-center py-20 text-red-500">{error}</div>;
+  }
 
-  if (!material)
-    return (
-      <div className="text-center py-20 text-text-secondary">Loading...</div>
-    );
+  if (!material) {
+    return <div className="text-center py-20 text-text-secondary">Loading...</div>;
+  }
 
   return (
     <div className="p-10 space-y-8 bg-main-bg min-h-screen">
@@ -59,7 +57,7 @@ export default function CourseModulesPage() {
       </h1>
 
       <div className="bg-white shadow-xl rounded-3xl p-8 leading-relaxed text-[15px] whitespace-pre-line">
-        {material?.content || "No content available"} ✅
+        {material.content || "No content available"}
       </div>
     </div>
   );
