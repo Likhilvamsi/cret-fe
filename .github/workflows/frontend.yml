@@ -20,26 +20,27 @@ jobs:
         node-version: 20
         cache: 'npm'
 
-    # 3️⃣ Cache Next.js build cache (reduces build time)
-    - name: Cache npm + Next.js build
+    # 3️⃣ Cache node_modules + Next.js build cache → big speed up
+    - name: Cache Dependencies & Build
       uses: actions/cache@v3
       with:
         path: |
-          ~/.npm
+          node_modules
           .next/cache
-        key: ${{ runner.os }}-next-${{ hashFiles('package-lock.json') }}
+          ~/.npm
+        key: ${{ runner.os }}-crt-${{ hashFiles('package-lock.json') }}
         restore-keys: |
-          ${{ runner.os }}-next-
+          ${{ runner.os }}-crt-
 
-    # 4️⃣ Install dependencies
+    # 4️⃣ Install dependencies (fast & clean)
     - name: Install Dependencies
       run: npm ci
 
-    # 5️⃣ Build frontend on GitHub (fast)
+    # 5️⃣ Build Next.js on GitHub (NOT on server) → fastest deploy
     - name: Build Next.js
       run: npm run build
 
-    # 6️⃣ Prepare build for deployment
+    # 6️⃣ Prepare artifacts to deploy
     - name: Prepare deploy artifacts
       run: |
         mkdir -p deploy-dist
@@ -51,57 +52,50 @@ jobs:
         mkdir -p ~/.ssh
         echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
         chmod 600 ~/.ssh/id_rsa
-        ssh-keyscan -H "${{ secrets.SSH_HOST }}" >> ~/.ssh/known_hosts
+        ssh-keyscan -H ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
 
-    # 8️⃣ Deploy frontend build to server
+    # 8️⃣ Deploy Frontend Build only (no npm install or build on server)
     - name: Deploy Frontend to Server
       run: |
         ssh -i ~/.ssh/id_rsa ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "mkdir -p ~/crt-app/frontend"
         scp -i ~/.ssh/id_rsa -r deploy-dist/* ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:~/crt-app/frontend/
 
-    # 9️⃣ Restart frontend using PM2
-    - name: Restart Frontend (PM2)
+    # 9️⃣ Start/Reload Frontend via PM2
+    - name: Start Frontend (PM2)
       run: |
         ssh -i ~/.ssh/id_rsa ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "
-          if ! command -v pm2 >/dev/null 2>&1; then sudo npm install -g pm2; fi
-          cd ~/crt-app/frontend
-          pm2 delete crt-frontend || true
-          pm2 start 'npx next start -p 3000' --name crt-frontend
+          npm install --production || true
+          pm2 reload crt-frontend --update-env || pm2 start ~/crt-app/frontend/node_modules/.bin/next -- start -p 3000 --name crt-frontend
           pm2 save
         "
 
-    # 🔟 Deploy backend using PM2
-    - name: Restart Backend (PM2)
+    # 🔟 Deploy Backend via PM2 safely
+    - name: Start Backend (PM2)
       run: |
         ssh -i ~/.ssh/id_rsa ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "
-          cd ~/crt-app/backend
-          source venv/bin/activate || true
-          pm2 delete backend || true
-          pm2 start 'uvicorn main:app --host 0.0.0.0 --port 8000' --name backend
+          pm2 reload backend --update-env || pm2 start uvicorn --name backend -- main:app --host 0.0.0.0 --port 8000
           pm2 save
         "
 
-    # 1️⃣1️⃣ Create & deploy NGINX config automatically
+    # 1️⃣1️⃣ Generate & Deploy NGINX reverse proxy config
     - name: Generate & Deploy NGINX Config
       run: |
-        cat << 'EOF' > crt.conf
+        echo "
         server {
             listen 80;
             server_name _;
-
             location / {
-                proxy_pass http://localhost:3000;
-                proxy_set_header Host $host;
-                proxy_set_header X-Real-IP $remote_addr;
+                proxy_pass http://127.0.0.1:3000;
+                proxy_set_header Host \$host;
+                proxy_set_header X-Real-IP \$remote_addr;
             }
-
             location /api/ {
-                proxy_pass http://localhost:8000/;
-                proxy_set_header Host $host;
-                proxy_set_header X-Real-IP $remote_addr;
+                proxy_pass http://127.0.0.1:8000/;
+                proxy_set_header Host \$host;
+                proxy_set_header X-Real-IP \$remote_addr;
             }
         }
-        EOF
+        " > crt.conf
 
         scp -i ~/.ssh/id_rsa crt.conf ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/tmp/crt.conf
         ssh -i ~/.ssh/id_rsa ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "
@@ -111,7 +105,7 @@ jobs:
           sudo systemctl restart nginx
         "
 
-    # 1️⃣2️⃣ Verify deployed services
+    # 1️⃣2️⃣ Verify PM2 services
     - name: Verify PM2 Services
       run: |
         ssh -i ~/.ssh/id_rsa ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "pm2 status"
