@@ -12,14 +12,40 @@ function ModuleContent() {
   useEffect(() => {
     async function fetchMaterial() {
       try {
-        const res = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/student/read-material`);
+        if (!moduleId) {
+          setMaterial({ content: "Module ID not found in URL." });
+          return;
+        }
+
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 10000); // 10s timeout
+
+        const res = await fetch(
+          `${process.env.NEXT_PUBLIC_API_BASE_URL}/student/read-material?module=${moduleId}`,
+          {
+            method: "GET",
+            headers: { "Content-Type": "application/json" },
+            signal: controller.signal,
+          }
+        );
+
+        clearTimeout(timeout);
+
+        if (!res.ok) {
+          const errorText = await res.text();
+          console.error(`Backend Error (status ${res.status}):`, errorText);
+          setMaterial({ content: `Server Error: ${res.status} — ${errorText}` });
+          return;
+        }
+
         const data = await res.json();
-        setMaterial(data);
+        setMaterial({ content: data.content || "No study material available for this module." });
       } catch (error) {
-        console.error("API Fetch Error:", error);
-        setMaterial({ content: "Failed to load study material." });
+        console.error("Network/API Fetch Error:", error);
+        setMaterial({ content: "Failed to load study material: " + error.message });
       }
     }
+
     fetchMaterial();
   }, [moduleId]);
 
