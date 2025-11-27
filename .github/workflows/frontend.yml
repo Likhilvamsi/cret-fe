@@ -9,18 +9,15 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    # 1️⃣ Checkout code
     - uses: actions/checkout@v3
 
-    # 2️⃣ Setup Node 20 + cache
     - name: Setup Node 20
       uses: actions/setup-node@v4
       with:
         node-version: 20
         cache: 'npm'
 
-    # 3️⃣ Cache npm + Next.js
-    - name: Cache npm + Next.js build
+    - name: Cache npm + Next.js cache
       uses: actions/cache@v3
       with:
         path: |
@@ -30,21 +27,17 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-crt-
 
-    # 4️⃣ Install dependencies
     - name: Install Dependencies
       run: npm ci
 
-    # 5️⃣ Build frontend
     - name: Build Next.js
       run: npm run build
 
-    # 6️⃣ Prepare deploy package
     - name: Prepare deploy artifacts
       run: |
         mkdir -p deploy-dist
-        cp -r .next public package.json deploy-dist/
+        cp -r .next public package.json node_modules deploy-dist/
 
-    # 7️⃣ Setup SSH
     - name: Setup SSH Keys
       run: |
         mkdir -p ~/.ssh
@@ -52,24 +45,20 @@ jobs:
         chmod 600 ~/.ssh/id_rsa
         ssh-keyscan -H ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
 
-    # 8️⃣ Deploy frontend
     - name: Deploy Frontend to Server
       run: |
         ssh -i ~/.ssh/id_rsa ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "mkdir -p ~/crt-app/frontend"
         scp -i ~/.ssh/id_rsa -r deploy-dist/* ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:~/crt-app/frontend/
 
-    # 9️⃣ Restart frontend via PM2
     - name: Restart Frontend (PM2)
       run: |
         ssh -i ~/.ssh/id_rsa ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "
-          if ! command -v pm2 >/dev/null 2>&1; then sudo npm install -g pm2; fi
           cd ~/crt-app/frontend
           pm2 delete crt-frontend || true
           pm2 start 'npx next start -p 3000' --name crt-frontend
           pm2 save
         "
 
-    # 🔟 Start backend via PM2
     - name: Restart Backend (PM2)
       run: |
         ssh -i ~/.ssh/id_rsa ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "
@@ -80,13 +69,12 @@ jobs:
           pm2 save
         "
 
-    # 1️⃣1️⃣ Generate NGINX config inside workflow
-    - name: Generate & Upload NGINX Config
+    - name: Upload NGINX Config
       run: |
         cat << 'EOF' > crt.conf
         server {
             listen 80;
-            server_name _;
+            server_name 52.247.225.119;
 
             location / {
                 proxy_pass http://localhost:3000;
@@ -94,8 +82,8 @@ jobs:
                 proxy_set_header X-Real-IP $remote_addr;
             }
 
-            location /api/ {
-                proxy_pass http://localhost:8000/;
+            location /student/ {
+                proxy_pass http://localhost:8000/student/;
                 proxy_set_header Host $host;
                 proxy_set_header X-Real-IP $remote_addr;
             }
@@ -103,6 +91,7 @@ jobs:
         EOF
 
         scp -i ~/.ssh/id_rsa crt.conf ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/tmp/crt.conf
+
         ssh -i ~/.ssh/id_rsa ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "
           sudo mv /tmp/crt.conf /etc/nginx/sites-available/crt.conf &&
           sudo ln -sf /etc/nginx/sites-available/crt.conf /etc/nginx/sites-enabled/crt.conf &&
@@ -110,7 +99,6 @@ jobs:
           sudo systemctl restart nginx
         "
 
-    # 1️⃣2️⃣ Verify PM2 status
     - name: Verify PM2
       run: |
         ssh -i ~/.ssh/id_rsa ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "pm2 status"
