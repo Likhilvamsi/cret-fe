@@ -1,4 +1,6 @@
 "use client";
+export const dynamic = "force-dynamic";
+export const revalidate = false;
 
 import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
@@ -43,7 +45,7 @@ export default function CourseModulesPage() {
       </h1>
 
       <div className="bg-white shadow-xl rounded-3xl p-8 leading-relaxed text-[15px] whitespace-pre-line">
-        {material.content || "No content available"}
+        {material?.content || "No content available"}
       </div>
     </div>
   );
